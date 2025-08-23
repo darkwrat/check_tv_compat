@@ -29,3 +29,7 @@ target_link_libraries(check_tv_compat
 message(STATUS "AVFORMAT libraries: ${AVFORMAT_LIBRARIES}")
 message(STATUS "AVCODEC libraries: ${AVCODEC_LIBRARIES}")
 message(STATUS "AVUTIL libraries: ${AVUTIL_LIBRARIES}")
+
+
+install(TARGETS check_tv_compat
+        RUNTIME DESTINATION bin)
