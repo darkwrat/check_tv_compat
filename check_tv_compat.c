@@ -1,3 +1,18 @@
+/*
+ * Samsung Frame 2024 TV Video File Checker
+ * ----------------------------------------
+ * Checks if video/audio/subtitle streams and containers are supported by Samsung Frame 2024 TV.
+ * Suggests ffmpeg remuxing or transcoding commands for unsupported files.
+ *
+ * Usage:
+ *   check_tv_compat <file-or-directory> [--exclude dir1 ...] [--fullpath] [--brief] [--skip-ok] [--skip-unfixable]
+ *
+ * Limitations:
+ *   - Supported codec/container lists are based on public Samsung documentation, but may not be exhaustive.
+ *   - POSIX only (uses dirent.h, unistd.h, etc).
+ *   - Requires FFmpeg development libraries.
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,6 +25,7 @@
 #include <dirent.h>
 #include <unistd.h>
 #include <errno.h>
+#include <fnmatch.h>
 
 #define COLOR_GREEN  "\033[32m"
 #define COLOR_RED    "\033[31m"
@@ -17,7 +33,6 @@
 #define COLOR_RESET  "\033[0m"
 
 #define PATH_BUF_SIZE 4096
-#define MAX_STREAMS 128
 
 typedef struct {
     int total;
@@ -160,12 +175,18 @@ void check_file(const char *filepath, int show_full_path, Summary *summary) {
         return;
 
     if ((ret = avformat_open_input(&fmt_ctx, filepath, NULL, NULL)) < 0) {
-        if (!brief_mode) print_ffmpeg_error(filename, ret);
+        if (!brief_mode)
+            print_ffmpeg_error(filename, ret);
+        else
+            printf("%s: " COLOR_YELLOW "error: could not open (%d)\n" COLOR_RESET, filename, ret);
         summary->errors++;
         return;
     }
     if ((ret = avformat_find_stream_info(fmt_ctx, NULL)) < 0) {
-        if (!brief_mode) print_ffmpeg_error(filename, ret);
+        if (!brief_mode)
+            print_ffmpeg_error(filename, ret);
+        else
+            printf("%s: " COLOR_YELLOW "error: could not read stream info (%d)\n" COLOR_RESET, filename, ret);
         avformat_close_input(&fmt_ctx);
         summary->errors++;
         return;
@@ -317,6 +338,7 @@ void check_file(const char *filepath, int show_full_path, Summary *summary) {
             "ffmpeg -i %s -map 0 -c copy %s",
             escaped_in, escaped_out);
         printf("\n  Suggested remuxing command:\n    %s\n", remux_cmd);
+        printf(COLOR_YELLOW "    (This changes only the container; streams are copied without re-encoding)\n" COLOR_RESET);
         free(escaped_in);
         free(escaped_out);
     }
@@ -325,7 +347,14 @@ void check_file(const char *filepath, int show_full_path, Summary *summary) {
     if (!all_supported && (has_video || has_audio) && can_transcode) {
         char cmd[8192] = {0};
         char fixed_basename[PATH_BUF_SIZE];
-        snprintf(fixed_basename, sizeof(fixed_basename), "fixed_%s", get_basename(filepath));
+        // Always output to .mkv for transcoded files
+        const char *base = get_basename(filepath);
+        const char *dot = strrchr(base, '.');
+        if (dot) {
+            snprintf(fixed_basename, sizeof(fixed_basename), "fixed_%.*s.mkv", (int)(dot - base), base);
+        } else {
+            snprintf(fixed_basename, sizeof(fixed_basename), "fixed_%s.mkv", base);
+        }
         char *escaped_in = shell_escape_single(filepath);
         char *escaped_out = shell_escape_single(fixed_basename);
 
@@ -394,16 +423,9 @@ void scan_dir(const char *dirpath, char **excludes, int num_excludes, int show_f
 
 int is_excluded(const char *path, char **excludes, int num_excludes) {
     for (int i = 0; i < num_excludes; ++i) {
-        const char *ex = excludes[i];
-        size_t exlen = strlen(ex);
-        const char *p = path;
-        while ((p = strstr(p, ex))) {
-            if ((p == path || *(p-1) == '/' ) &&
-                (*(p+exlen) == '/' || *(p+exlen) == '\0')) {
-                return 1;
-            }
-            p += exlen;
-        }
+        // Match directory or file name with pattern
+        if (fnmatch(excludes[i], path, 0) == 0)
+            return 1;
     }
     return 0;
 }
