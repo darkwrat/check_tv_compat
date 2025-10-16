@@ -49,15 +49,29 @@ void quiet_ffmpeg_log(void *ptr, int level, const char *fmt, va_list vl) {
     (void)ptr; (void)level; (void)fmt; (void)vl;
 }
 
-int is_video_codec_supported(enum AVCodecID id) {
+int is_video_codec_supported(AVCodecParameters *par) {
+    enum AVCodecID id = par->codec_id;
+
     return id == AV_CODEC_ID_H264 ||
            id == AV_CODEC_ID_HEVC ||
-           id == AV_CODEC_ID_MPEG4 ||
            id == AV_CODEC_ID_MPEG2VIDEO ||
            id == AV_CODEC_ID_VP9 ||
            id == AV_CODEC_ID_AV1 ||
            id == AV_CODEC_ID_MJPEG ||
-           id == AV_CODEC_ID_PNG;
+           id == AV_CODEC_ID_PNG ||
+           (id == AV_CODEC_ID_MPEG4 &&
+            par->codec_tag != MKTAG('X','V','I','D') &&
+            par->codec_tag != MKTAG('x','v','i','d') &&
+            par->codec_tag != MKTAG('D','I','V','X') &&
+            par->codec_tag != MKTAG('d','i','v','x') &&
+            par->codec_tag != MKTAG('D','X','5','0') &&
+            par->codec_tag != MKTAG('M','P','4','V') &&
+            par->codec_tag != MKTAG('m','p','4','v') &&
+            par->codec_tag != MKTAG('F','M','P','4') &&
+            par->codec_tag != MKTAG('f','m','p','4') &&
+            !(par->profile == FF_PROFILE_MPEG4_ADVANCED_SIMPLE ||
+              par->profile == FF_PROFILE_MPEG4_SIMPLE_STUDIO)
+           );
 }
 
 int is_audio_codec_supported(enum AVCodecID id) {
@@ -215,7 +229,7 @@ void check_file(const char *filepath, int show_full_path, Summary *summary) {
 
             if (par->codec_type == AVMEDIA_TYPE_VIDEO) {
                 type = "video";
-                supported = is_video_codec_supported(par->codec_id);
+                supported = is_video_codec_supported(par);
             } else if (par->codec_type == AVMEDIA_TYPE_AUDIO) {
                 type = "audio";
                 supported = is_audio_codec_supported(par->codec_id);
@@ -256,7 +270,7 @@ void check_file(const char *filepath, int show_full_path, Summary *summary) {
         if (!is_media_stream(par->codec_type)) continue;
         int supported = 1;
         if (par->codec_type == AVMEDIA_TYPE_VIDEO) {
-            supported = is_video_codec_supported(par->codec_id);
+            supported = is_video_codec_supported(par);
             has_video = 1;
             if (!supported) can_transcode = 1;
         } else if (par->codec_type == AVMEDIA_TYPE_AUDIO) {
@@ -303,7 +317,7 @@ void check_file(const char *filepath, int show_full_path, Summary *summary) {
 
         if (par->codec_type == AVMEDIA_TYPE_VIDEO) {
             type = "video";
-            supported = is_video_codec_supported(par->codec_id);
+            supported = is_video_codec_supported(par);
         } else if (par->codec_type == AVMEDIA_TYPE_AUDIO) {
             type = "audio";
             supported = is_audio_codec_supported(par->codec_id);
@@ -370,7 +384,7 @@ void check_file(const char *filepath, int show_full_path, Summary *summary) {
             if (!is_media_stream(par->codec_type)) continue;
             int supported = 1;
             if (par->codec_type == AVMEDIA_TYPE_VIDEO) {
-                supported = is_video_codec_supported(par->codec_id);
+                supported = is_video_codec_supported(par);
                 if (!had_video) { strcat(cmd, " -map 0:v"); had_video = 1; }
                 snprintf(v_opts + strlen(v_opts), sizeof(v_opts) - strlen(v_opts),
                     " -c:v:%d %s", v_cnt, supported ? "copy" : "libx264");

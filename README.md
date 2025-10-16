@@ -103,6 +103,7 @@ MIT License
 ## Credits
 
 - Co-authored and improved with ChatGPT (OpenAI)
+- XviD/MPEG-4 ASP detection improvements by Claude (Anthropic) - October 2025
 
 ---
 
