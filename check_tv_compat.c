@@ -20,6 +20,7 @@
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
 #include <libavutil/log.h>
+#include <libavutil/dovi_meta.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <dirent.h>
@@ -49,8 +50,21 @@ void quiet_ffmpeg_log(void *ptr, int level, const char *fmt, va_list vl) {
     (void)ptr; (void)level; (void)fmt; (void)vl;
 }
 
+int has_dolby_vision(AVCodecParameters *par) {
+    for (int i = 0; i < par->nb_coded_side_data; i++) {
+        if (par->coded_side_data[i].type == AV_PKT_DATA_DOVI_CONF) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 int is_video_codec_supported(AVCodecParameters *par) {
     enum AVCodecID id = par->codec_id;
+
+    // Reject HEVC with Dolby Vision (causes color issues on Samsung Frame)
+    if (id == AV_CODEC_ID_HEVC && has_dolby_vision(par))
+        return 0;
 
     return id == AV_CODEC_ID_H264 ||
            id == AV_CODEC_ID_HEVC ||

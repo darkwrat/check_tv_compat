@@ -104,6 +104,7 @@ MIT License
 
 - Co-authored and improved with ChatGPT (OpenAI)
 - XviD/MPEG-4 ASP detection improvements by Claude (Anthropic) - October 2025
+- Dolby Vision detection patch by Claude (Anthropic) - February 2026
 
 ---
 
